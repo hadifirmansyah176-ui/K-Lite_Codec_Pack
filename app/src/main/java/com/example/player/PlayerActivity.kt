@@ -26,6 +26,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var player: MediaPlayer
     private lateinit var eq: MediaPlayer.Equalizer
     private var pfd: ParcelFileDescriptor? = null
+    private var mediaRef: Media? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private var stopped = false
@@ -85,8 +86,8 @@ class PlayerActivity : AppCompatActivity() {
             pfd = contentResolver.openFileDescriptor(uri, "r")
             pfd?.let {
                 val media = Media(libVLC, it.fileDescriptor)
+                mediaRef = media
                 player.media = media
-                media.release()
                 player.play()
             }
             intent.getStringExtra("sub")?.let { path ->
@@ -114,7 +115,7 @@ class PlayerActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnFwd).setOnClickListener { skip(10_000) }
         findViewById<View>(R.id.btnStep).setOnClickListener {
             if (player.isPlaying) player.pause()
-            player.nextFrame()
+            player.time = player.time + 40   // maju kira-kira 1 frame
         }
 
         seek.onSeek = { p ->
@@ -250,12 +251,19 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun buildTrackInfo(): String {
-        val v = player.currentVideoTrack
-        val a = player.currentAudioTrack
-        val sb = StringBuilder()
-        if (v != null) sb.append("[${codecName(v.codec)} ${v.width}x${v.height}]")
-        if (a != null) sb.append(" [${codecName(a.codec)} ${channels(a.channels)}]")
-        return sb.toString().trim()
+        val m = mediaRef ?: return ""
+        var video = ""
+        var audio = ""
+        for (i in 0 until m.trackCount) {
+            when (val t = m.getTrack(i)) {
+                is IMedia.VideoTrack ->
+                    if (video.isEmpty()) video = "[${codecName(t.codec)} ${t.width}x${t.height}]"
+                is IMedia.AudioTrack ->
+                    if (audio.isEmpty()) audio = "[${codecName(t.codec)} ${channels(t.channels)}]"
+                else -> {}
+            }
+        }
+        return "$video $audio".trim()
     }
 
     private fun codecName(c: String?): String = when (c?.lowercase()) {
@@ -297,6 +305,6 @@ class PlayerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(tick)
-        player.release(); libVLC.release(); pfd?.close()
+        player.release(); mediaRef?.release(); libVLC.release(); pfd?.close()
     }
 }
