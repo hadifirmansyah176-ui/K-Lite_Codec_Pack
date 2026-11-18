@@ -23,8 +23,7 @@ class VolumeBarView @JvmOverloads constructor(
         style = Paint.Style.STROKE; color = Color.BLACK; strokeWidth = 1.5f * d
     }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE; textSize = 16f * d; isFakeBoldText = true
-        setShadowLayer(3f * d, 0f, 0f, Color.BLACK)
+        color = Color.BLACK; textSize = 15f * d; isFakeBoldText = true
     }
     private val numberWidth = 44f * d
 

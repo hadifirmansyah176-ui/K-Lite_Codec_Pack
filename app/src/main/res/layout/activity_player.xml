@@ -1,41 +1,126 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:orientation="vertical"
+    android:background="#FFFFFF">
 
-    <org.videolan.libvlc.util.VLCVideoLayout
-        android:id="@+id/videoLayout"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
+    <!-- Bar judul -->
     <LinearLayout
+        android:id="@+id/titleBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:background="#88000000"
-        android:orientation="horizontal"
+        android:layout_height="24dp"
+        android:background="#2E0B3F"
         android:gravity="center_vertical"
-        android:padding="8dp">
-
-        <Button
-            android:id="@+id/btnSub"
-            android:layout_width="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="6dp">
+        <ImageView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:src="@mipmap/ic_launcher" />
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Subtitle: ON" />
+            android:layout_marginStart="6dp"
+            android:singleLine="true"
+            android:ellipsize="middle"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
 
-        <Button
-            android:id="@+id/btnBass"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+    <!-- Bar menu -->
+    <LinearLayout
+        android:id="@+id/menuBar"
+        android:layout_width="match_parent"
+        android:layout_height="24dp"
+        android:orientation="horizontal"
+        android:background="#FFFFFF">
+        <TextView android:id="@+id/mFile" style="@style/MenuItem" android:text="File" />
+        <TextView android:id="@+id/mView" style="@style/MenuItem" android:text="View" />
+        <TextView android:id="@+id/mPlay" style="@style/MenuItem" android:text="Play" />
+        <TextView android:id="@+id/mNav" style="@style/MenuItem" android:text="Navigate" />
+        <TextView android:id="@+id/mFav" style="@style/MenuItem" android:text="Favorites" />
+        <TextView android:id="@+id/mHelp" style="@style/MenuItem" android:text="Help" />
+    </LinearLayout>
+
+    <!-- Area video -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#000000">
+        <org.videolan.libvlc.util.VLCVideoLayout
+            android:id="@+id/videoLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- Seek bar -->
+    <com.example.player.SeekBarView
+        android:id="@+id/seekBar"
+        android:layout_width="match_parent"
+        android:layout_height="18dp"
+        android:layout_marginStart="2dp"
+        android:layout_marginEnd="2dp"
+        android:layout_marginTop="2dp" />
+
+    <!-- Tombol kontrol -->
+    <LinearLayout
+        android:id="@+id/controlRow"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp">
+        <ImageButton android:id="@+id/btnPlay" style="@style/CtrlBtn" android:src="@drawable/ic_play" />
+        <ImageButton android:id="@+id/btnStop" style="@style/CtrlBtn" android:src="@drawable/ic_stop" />
+        <ImageButton android:id="@+id/btnPrev" style="@style/CtrlBtn" android:src="@drawable/ic_prev" />
+        <ImageButton android:id="@+id/btnRew" style="@style/CtrlBtn" android:src="@drawable/ic_rew" />
+        <ImageButton android:id="@+id/btnFwd" style="@style/CtrlBtn" android:src="@drawable/ic_fwd" />
+        <ImageButton android:id="@+id/btnNext" style="@style/CtrlBtn" android:src="@drawable/ic_next" />
+        <ImageButton android:id="@+id/btnStep" style="@style/CtrlBtn" android:src="@drawable/ic_step" />
+
+        <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+
+        <TextView android:id="@+id/btnSub" style="@style/TextBtn" android:gravity="center" android:text="Subtitle: ON" />
+        <TextView android:id="@+id/btnBass" style="@style/TextBtn" android:gravity="center" android:text="Bass 0%" />
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_marginStart="8dp"
-            android:text="Bass 0%" />
-
+            android:src="@drawable/ic_vol" />
         <com.example.player.VolumeBarView
             android:id="@+id/volumeBar"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="16dp"
-            android:layout_weight="1" />
+            android:layout_width="150dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="4dp" />
     </LinearLayout>
-</FrameLayout>
+
+    <!-- Bar status -->
+    <LinearLayout
+        android:id="@+id/statusBar"
+        android:layout_width="match_parent"
+        android:layout_height="22dp"
+        android:background="#000000"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+        <TextView
+            android:id="@+id/tvState"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:singleLine="true"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+        <TextView
+            android:id="@+id/tvTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>
