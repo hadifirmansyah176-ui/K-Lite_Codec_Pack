@@ -24,7 +24,6 @@ class PlayerActivity : AppCompatActivity() {
 
     private lateinit var libVLC: LibVLC
     private lateinit var player: MediaPlayer
-    private lateinit var eq: MediaPlayer.Equalizer
     private var pfd: ParcelFileDescriptor? = null
     private var mediaRef: Media? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -32,7 +31,6 @@ class PlayerActivity : AppCompatActivity() {
     private var stopped = false
     private var subtitleOn = true
     private var lastSpu = -1
-    private var bass = 0 // 0..200 (%)
     private var trackInfo = ""
     private var uriKey = ""
 
@@ -76,9 +74,6 @@ class PlayerActivity : AppCompatActivity() {
         player.setEventListener { ev ->
             if (ev.type == MediaPlayer.Event.EndReached) stopped = true
         }
-
-        eq = MediaPlayer.Equalizer.create()
-        player.setEqualizer(eq)
 
         intent.data?.let { uri ->
             uriKey = uri.toString()
@@ -136,34 +131,12 @@ class PlayerActivity : AppCompatActivity() {
             subtitleOn = !subtitleOn
             btnSub.text = if (subtitleOn) "Subtitle: ON" else "Subtitle: OFF"
         }
-
-        // Bass: tiap tekan +20% sampai 200%, lalu kembali 0
-        val btnBass = findViewById<TextView>(R.id.btnBass)
-        btnBass.setOnClickListener {
-            bass = if (bass >= 200) 0 else bass + 20
-            applyBass()
-            btnBass.text = "Bass $bass%"
-        }
-
-        // Volume 0-100
-        val vol = findViewById<VolumeBarView>(R.id.volumeBar)
-        vol.level = 100
-        vol.onChange = { player.volume = it }
     }
 
     private fun skip(ms: Long) {
         val len = player.length
         val t = (player.time + ms).coerceAtLeast(0)
         player.time = if (len > 0) t.coerceAtMost(len - 500) else t
-    }
-
-    private fun applyBass() {
-        val db = bass / 200f * 20f
-        eq.setAmp(0, db)
-        eq.setAmp(1, db * 0.8f)
-        eq.setAmp(2, db * 0.5f)
-        eq.preAmp = -db / 2f
-        player.setEqualizer(eq)
     }
 
     // ---------- menu ----------

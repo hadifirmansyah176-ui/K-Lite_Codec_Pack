@@ -8,11 +8,11 @@ Gaya: Arial Bold, kuning, garis tepi hitam
 
 3
 00:00:20,000 --> 00:00:28,000
-Tekan tombol Bass untuk menambah bass sampai 200%
+Gunakan tombol volume HP untuk mengatur suara
 
 4
 00:00:30,000 --> 00:00:38,000
-Geser bar volume biru untuk mengatur 0 - 100
+Sentuh bar hijau untuk melompat ke bagian lain
 
 5
 00:00:40,000 --> 00:00:48,000
