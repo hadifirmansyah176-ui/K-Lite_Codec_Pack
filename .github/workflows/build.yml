@@ -25,5 +25,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: VideoPlayer-debug-apk
+          name: KLiteCodecPackA-debug-apk
           path: app/build/outputs/apk/debug/*.apk
