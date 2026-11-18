@@ -1,0 +1,23 @@
+1
+00:00:01,000 --> 00:00:08,000
+Demo subtitle: tekan tombol Subtitle untuk ON/OFF
+
+2
+00:00:10,000 --> 00:00:18,000
+Gaya: Arial Bold, kuning, garis tepi hitam
+
+3
+00:00:20,000 --> 00:00:28,000
+Tekan tombol Bass untuk menambah bass sampai 200%
+
+4
+00:00:30,000 --> 00:00:38,000
+Geser bar volume biru untuk mengatur 0 - 100
+
+5
+00:00:40,000 --> 00:00:48,000
+Video demo berdurasi 1 menit
+
+6
+00:00:50,000 --> 00:00:58,000
+Selesai. Selamat mencoba!

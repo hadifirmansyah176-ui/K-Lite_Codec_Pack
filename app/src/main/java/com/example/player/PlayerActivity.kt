@@ -7,6 +7,9 @@ import androidx.appcompat.app.AppCompatActivity
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.interfaces.IMedia
+import android.net.Uri
+import java.io.File
 import org.videolan.libvlc.util.VLCVideoLayout
 
 class PlayerActivity : AppCompatActivity() {
@@ -47,6 +50,9 @@ class PlayerActivity : AppCompatActivity() {
                 player.media = media
                 media.release()
                 player.play()
+            }
+            intent.getStringExtra("sub")?.let { path ->
+                player.addSlave(IMedia.Slave.Type.Subtitle, Uri.fromFile(File(path)), true)
             }
         }
 
