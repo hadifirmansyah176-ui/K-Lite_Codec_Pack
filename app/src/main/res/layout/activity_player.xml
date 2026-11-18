@@ -85,13 +85,30 @@
         <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
 
         <TextView android:id="@+id/btnSub" style="@style/TextBtn" android:gravity="center" android:text="Subtitle: ON" />
+        <com.example.player.BoostButtonView
+            android:id="@+id/btnBoost"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp" />
+        <ImageView
+            android:id="@+id/imgVol"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="12dp"
+            android:padding="2dp"
+            android:src="@drawable/ic_vol" />
+        <com.example.player.VolumeBoxView
+            android:id="@+id/volumeBox"
+            android:layout_width="96dp"
+            android:layout_height="26dp"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <!-- Bar status -->
     <LinearLayout
         android:id="@+id/statusBar"
         android:layout_width="match_parent"
-        android:layout_height="22dp"
+        android:layout_height="28dp"
         android:background="#000000"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -109,7 +126,9 @@
             android:id="@+id/tvTime"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="11sp" />
+            android:textColor="#1E96F0"
+            android:textSize="15sp"
+            android:shadowColor="#66FF8A00"
+            android:shadowRadius="4" />
     </LinearLayout>
 </LinearLayout>

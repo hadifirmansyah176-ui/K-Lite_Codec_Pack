@@ -91,6 +91,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         setupControls()
+        setupVolume()
         setupMenus()
         handler.post(tick)
     }
@@ -130,6 +131,39 @@ class PlayerActivity : AppCompatActivity() {
             }
             subtitleOn = !subtitleOn
             btnSub.text = if (subtitleOn) "Subtitle: ON" else "Subtitle: OFF"
+        }
+    }
+
+    private var lastVol = 100
+    private var boost = false
+
+    /** Volume efektif: 0-100, atau 0-200 bila boost aktif. */
+    private fun applyVolume(level: Int) {
+        player.volume = if (boost) level * 2 else level
+    }
+
+    private fun setupVolume() {
+        val box = findViewById<VolumeBoxView>(R.id.volumeBox)
+        val btnBoost = findViewById<BoostButtonView>(R.id.btnBoost)
+        box.level = 100
+        box.onChange = { applyVolume(it) }
+
+        // Tombol boost: merah = aktif (sampai 200%), putih = nonaktif
+        btnBoost.onToggle = { on ->
+            boost = on
+            box.multiplier = if (on) 2 else 1
+            applyVolume(box.level)
+        }
+
+        // Sentuh ikon speaker untuk mute / unmute
+        findViewById<View>(R.id.imgVol).setOnClickListener {
+            if (box.level > 0) {
+                lastVol = box.level
+                box.level = 0
+            } else {
+                box.level = if (lastVol > 0) lastVol else 100
+            }
+            applyVolume(box.level)
         }
     }
 
