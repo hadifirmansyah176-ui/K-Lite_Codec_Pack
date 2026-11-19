@@ -1,16 +1,22 @@
 package com.example.player
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import org.videolan.libvlc.LibVLC
@@ -19,6 +25,8 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
+import java.net.URLEncoder
+import kotlin.math.abs
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -33,13 +41,28 @@ class PlayerActivity : AppCompatActivity() {
     private var lastSpu = -1
     private var trackInfo = ""
     private var uriKey = ""
+    private var videoName = ""
 
     private lateinit var seek: SeekBarView
     private lateinit var tvState: TextView
     private lateinit var tvTime: TextView
     private lateinit var btnPlay: ImageButton
+    private lateinit var btnSub: TextView
     private lateinit var chrome: List<View>
     private val prefs by lazy { getSharedPreferences("fav", MODE_PRIVATE) }
+
+    // Load Subtitle dari penyimpanan
+    private val pickSub = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                val f = File(cacheDir, "sub_${System.currentTimeMillis()}_${displayName(uri)}")
+                contentResolver.openInputStream(uri)?.use { i -> f.outputStream().use { i.copyTo(it) } }
+                addSubtitleFile(f)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Gagal memuat subtitle", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,8 +77,11 @@ class PlayerActivity : AppCompatActivity() {
         tvState = findViewById(R.id.tvState)
         tvTime = findViewById(R.id.tvTime)
         btnPlay = findViewById(R.id.btnPlay)
-        chrome = listOf(R.id.titleBar, R.id.menuBar, R.id.seekBar, R.id.controlRow, R.id.statusBar)
-            .map { findViewById<View>(it) }
+        btnSub = findViewById(R.id.btnSub)
+        chrome = listOf(
+            R.id.titleBar, R.id.menuBar, R.id.seekBar, R.id.controlRow,
+            R.id.statusBar, R.id.volOverlay
+        ).map { findViewById<View>(it) }
 
         // Gaya subtitle: Arial, Bold, kuning, garis tepi hitam, ukuran 13
         val args = arrayListOf(
@@ -77,7 +103,8 @@ class PlayerActivity : AppCompatActivity() {
 
         intent.data?.let { uri ->
             uriKey = uri.toString()
-            findViewById<TextView>(R.id.tvTitle).text = displayName(uri)
+            videoName = displayName(uri)
+            findViewById<TextView>(R.id.tvTitle).text = videoName
             pfd = contentResolver.openFileDescriptor(uri, "r")
             pfd?.let {
                 val media = Media(libVLC, it.fileDescriptor)
@@ -111,7 +138,7 @@ class PlayerActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnFwd).setOnClickListener { skip(10_000) }
         findViewById<View>(R.id.btnStep).setOnClickListener {
             if (player.isPlaying) player.pause()
-            player.time = player.time + 40   // maju kira-kira 1 frame
+            player.time = player.time + 40
         }
 
         seek.onSeek = { p ->
@@ -120,7 +147,6 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         // Subtitle on/off
-        val btnSub = findViewById<TextView>(R.id.btnSub)
         btnSub.setOnClickListener {
             if (subtitleOn) {
                 lastSpu = player.spuTrack
@@ -130,10 +156,15 @@ class PlayerActivity : AppCompatActivity() {
                 player.spuTrack = if (lastSpu != -1) lastSpu else first
             }
             subtitleOn = !subtitleOn
-            btnSub.text = if (subtitleOn) "Subtitle: ON" else "Subtitle: OFF"
+            updateSubButton()
         }
     }
 
+    private fun updateSubButton() {
+        btnSub.text = if (subtitleOn) "Subtitle: ON" else "Subtitle: OFF"
+    }
+
+    // ---------- volume ----------
     private var lastVol = 100
     private var boost = false
 
@@ -145,25 +176,65 @@ class PlayerActivity : AppCompatActivity() {
     private fun setupVolume() {
         val box = findViewById<VolumeBoxView>(R.id.volumeBox)
         val btnBoost = findViewById<BoostButtonView>(R.id.btnBoost)
-        box.level = 100
-        box.onChange = { applyVolume(it) }
+        val volBtn = findViewById<ImageView>(R.id.volBtn)
+        val volNumber = findViewById<TextView>(R.id.volNumber)
+        val imgVol = findViewById<ImageView>(R.id.imgVol)
 
-        // Tombol boost: merah = aktif (sampai 200%), putih = nonaktif
+        fun render() {
+            volNumber.text = box.level.toString()
+            volBtn.setImageResource(if (box.level > 0) R.drawable.vol_btn_high else R.drawable.vol_btn_low)
+            imgVol.alpha = if (box.level > 0) 1f else 0.4f
+        }
+        fun setLevel(l: Int) {
+            box.level = l.coerceIn(0, 100)
+            applyVolume(box.level)
+            render()
+        }
+
+        box.level = 100
+        render()
+        box.onChange = { applyVolume(it); render() }
+
+        // Boost: merah = aktif (sampai 200%), putih = nonaktif
         btnBoost.onToggle = { on ->
             boost = on
             box.multiplier = if (on) 2 else 1
             applyVolume(box.level)
         }
 
-        // Sentuh ikon speaker untuk mute / unmute
-        findViewById<View>(R.id.imgVol).setOnClickListener {
-            if (box.level > 0) {
-                lastVol = box.level
-                box.level = 0
-            } else {
-                box.level = if (lastVol > 0) lastVol else 100
+        // Tombol volume kiri-tengah: sentuh = mute/unmute, geser atas/bawah = atur volume 0-100
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
+        val density = resources.displayMetrics.density
+        var startY = 0f
+        var startLevel = 0
+        var moved = false
+        volBtn.setOnTouchListener { v, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = e.rawY; startLevel = box.level; moved = false; true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = startY - e.rawY
+                    if (abs(dy) > slop) moved = true
+                    if (moved) setLevel(startLevel + (dy / (2 * density)).toInt())
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) {
+                        if (box.level > 0) { lastVol = box.level; setLevel(0) }
+                        else setLevel(if (lastVol > 0) lastVol else 100)
+                    }
+                    v.performClick()
+                    true
+                }
+                else -> false
             }
-            applyVolume(box.level)
+        }
+
+        // Ikon speaker di baris bawah: sentuh = mute / unmute
+        imgVol.setOnClickListener {
+            if (box.level > 0) { lastVol = box.level; setLevel(0) }
+            else setLevel(if (lastVol > 0) lastVol else 100)
         }
     }
 
@@ -171,6 +242,67 @@ class PlayerActivity : AppCompatActivity() {
         val len = player.length
         val t = (player.time + ms).coerceAtLeast(0)
         player.time = if (len > 0) t.coerceAtMost(len - 500) else t
+    }
+
+    // ---------- subtitle ----------
+    private fun addSubtitleFile(f: File) {
+        player.addSlave(IMedia.Slave.Type.Subtitle, Uri.fromFile(f), true)
+        subtitleOn = true
+        updateSubButton()
+        Toast.makeText(this, "Subtitle dimuat", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun downloadSubtitle() {
+        val query = SubtitleDownloader.cleanQuery(videoName)
+        if (!SubtitleConfig.configured) {
+            AlertDialog.Builder(this)
+                .setTitle("Download Subtitle")
+                .setMessage(
+                    "Pencarian otomatis butuh akun OpenSubtitles. Isi API key, username, dan " +
+                    "password di SubtitleConfig (file SubtitleDownloader.kt).\n\n" +
+                    "Sementara, subtitle untuk \"$query\" bisa dicari lewat browser."
+                )
+                .setPositiveButton("Cari di browser") { _, _ ->
+                    val q = URLEncoder.encode("$query subtitle indonesia", "UTF-8")
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$q")))
+                }
+                .setNegativeButton("Batal", null)
+                .show()
+            return
+        }
+        Toast.makeText(this, "Mencari subtitle: $query", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val f = SubtitleDownloader.download(query, cacheDir)
+                runOnUiThread { addSubtitleFile(f) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Gagal: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    // ---------- pilih track ----------
+    private fun showTracks(
+        title: String,
+        tracks: Array<MediaPlayer.TrackDescription>?,
+        current: Int,
+        onPick: (Int) -> Unit
+    ) {
+        if (tracks == null || tracks.isEmpty()) {
+            Toast.makeText(this, "Tidak ada track", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val names = tracks.map { it.name ?: "Track ${it.id}" }.toTypedArray()
+        val checked = tracks.indexOfFirst { it.id == current }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setSingleChoiceItems(names, checked) { d, which ->
+                onPick(tracks[which].id)
+                d.dismiss()
+            }
+            .show()
     }
 
     // ---------- menu ----------
@@ -184,6 +316,11 @@ class PlayerActivity : AppCompatActivity() {
     private fun setupMenus() {
         findViewById<View>(R.id.mFile).setOnClickListener { v ->
             menu(v,
+                "Subtitle" to {
+                    menu(v,
+                        "Load Subtitle" to { pickSub.launch(arrayOf("*/*")) },
+                        "Download Subtitle" to { downloadSubtitle() })
+                },
                 "Buka video lain" to { finish() },
                 "Keluar" to { finishAffinity() })
         }
@@ -198,19 +335,24 @@ class PlayerActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.mPlay).setOnClickListener { v ->
             menu(v,
-                "Play / Pause" to { btnPlay.performClick() },
-                "Stop" to { findViewById<View>(R.id.btnStop).performClick() },
-                "Kecepatan 0.5x" to { player.rate = 0.5f },
-                "Kecepatan 1x" to { player.rate = 1f },
-                "Kecepatan 1.5x" to { player.rate = 1.5f },
-                "Kecepatan 2x" to { player.rate = 2f })
+                "Audio Track" to {
+                    showTracks("Audio Track", player.audioTracks, player.audioTrack) {
+                        player.audioTrack = it
+                    }
+                },
+                "Subtitle Track" to {
+                    showTracks("Subtitle Track", player.spuTracks, player.spuTrack) { id ->
+                        player.spuTrack = id
+                        subtitleOn = id != -1
+                        if (id != -1) lastSpu = id
+                        updateSubButton()
+                    }
+                })
         }
         findViewById<View>(R.id.mNav).setOnClickListener { v ->
             menu(v,
-                "Mundur 10 detik" to { skip(-10_000) },
-                "Maju 10 detik" to { skip(10_000) },
-                "Maju 1 menit" to { skip(60_000) },
-                "Ke awal" to { player.time = 0 })
+                "Previous" to { player.time = 0 },
+                "Next" to { skip(60_000) })
         }
         findViewById<View>(R.id.mFav).setOnClickListener { v ->
             menu(v,
@@ -223,10 +365,14 @@ class PlayerActivity : AppCompatActivity() {
                 })
         }
         findViewById<View>(R.id.mHelp).setOnClickListener { v ->
-            menu(v, "Tentang" to {
+            menu(v, "About" to {
                 AlertDialog.Builder(this)
-                    .setTitle("K-Lite Codec Pack A")
-                    .setMessage("Pemutar video berbasis libVLC.\nMendukung hampir semua format video.")
+                    .setTitle("About")
+                    .setMessage(
+                        "Aplikasi ini hanya untuk hiburan saja tidak diperjual belikan\n\n" +
+                        "Versi saat ini : V.1.0\n\n" +
+                        "by. Anonim"
+                    )
                     .setPositiveButton("OK", null)
                     .show()
             })
