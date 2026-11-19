@@ -176,13 +176,11 @@ class PlayerActivity : AppCompatActivity() {
     private fun setupVolume() {
         val box = findViewById<VolumeBoxView>(R.id.volumeBox)
         val btnBoost = findViewById<BoostButtonView>(R.id.btnBoost)
-        val volBtn = findViewById<ImageView>(R.id.volBtn)
         val volNumber = findViewById<TextView>(R.id.volNumber)
         val imgVol = findViewById<ImageView>(R.id.imgVol)
 
         fun render() {
             volNumber.text = box.level.toString()
-            volBtn.setImageResource(if (box.level > 0) R.drawable.vol_btn_high else R.drawable.vol_btn_low)
             imgVol.alpha = if (box.level > 0) 1f else 0.4f
         }
         fun setLevel(l: Int) {
@@ -202,34 +200,34 @@ class PlayerActivity : AppCompatActivity() {
             applyVolume(box.level)
         }
 
-        // Tombol volume kiri-tengah: sentuh = mute/unmute, geser atas/bawah = atur volume 0-100
-        val slop = ViewConfiguration.get(this).scaledTouchSlop
-        val density = resources.displayMetrics.density
-        var startY = 0f
-        var startLevel = 0
-        var moved = false
-        volBtn.setOnTouchListener { v, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startY = e.rawY; startLevel = box.level; moved = false; true
+        // Dua tombol volume kiri-tengah: atas = besarkan, bawah = kecilkan (0-100).
+        // Tahan tombol untuk mengubah terus-menerus.
+        fun bindStep(btn: View, delta: Int) {
+            val repeat = object : Runnable {
+                override fun run() {
+                    setLevel(box.level + delta)
+                    handler.postDelayed(this, 120)
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    val dy = startY - e.rawY
-                    if (abs(dy) > slop) moved = true
-                    if (moved) setLevel(startLevel + (dy / (2 * density)).toInt())
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!moved) {
-                        if (box.level > 0) { lastVol = box.level; setLevel(0) }
-                        else setLevel(if (lastVol > 0) lastVol else 100)
+            }
+            btn.setOnTouchListener { v, e ->
+                when (e.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        setLevel(box.level + delta)
+                        handler.postDelayed(repeat, 450)
+                        true
                     }
-                    v.performClick()
-                    true
+                    MotionEvent.ACTION_UP -> {
+                        handler.removeCallbacks(repeat); v.performClick(); true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        handler.removeCallbacks(repeat); true
+                    }
+                    else -> false
                 }
-                else -> false
             }
         }
+        bindStep(findViewById<View>(R.id.volUp), 5)
+        bindStep(findViewById<View>(R.id.volDown), -5)
 
         // Ikon speaker di baris bawah: sentuh = mute / unmute
         imgVol.setOnClickListener {
