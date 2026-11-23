@@ -1,6 +1,12 @@
 package com.example.player
 
+import android.Manifest
+import android.content.ContentUris
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.MediaStore
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -102,16 +108,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         intent.data?.let { uri ->
-            uriKey = uri.toString()
-            videoName = displayName(uri)
-            findViewById<TextView>(R.id.tvTitle).text = videoName
-            pfd = contentResolver.openFileDescriptor(uri, "r")
-            pfd?.let {
-                val media = Media(libVLC, it.fileDescriptor)
-                mediaRef = media
-                player.media = media
-                player.play()
-            }
+            loadVideo(uri)
             intent.getStringExtra("sub")?.let { path ->
                 player.addSlave(IMedia.Slave.Type.Subtitle, Uri.fromFile(File(path)), true)
             }
@@ -123,6 +120,83 @@ class PlayerActivity : AppCompatActivity() {
         handler.post(tick)
     }
 
+    // ---------- memuat video & pindah video ----------
+    private fun loadVideo(uri: Uri) {
+        player.stop()
+        val oldMedia = mediaRef
+        val oldPfd = pfd
+        uriKey = uri.toString()
+        videoName = displayName(uri)
+        findViewById<TextView>(R.id.tvTitle).text = videoName
+        trackInfo = ""
+        stopped = false
+        subtitleOn = true
+        lastSpu = -1
+        updateSubButton()
+        pfd = contentResolver.openFileDescriptor(uri, "r")
+        pfd?.let {
+            val media = Media(libVLC, it.fileDescriptor)
+            mediaRef = media
+            player.media = media
+            player.play()
+        }
+        oldMedia?.release()
+        oldPfd?.close()
+    }
+
+    private var pendingNav = 0
+
+    private val askPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) navigate(pendingNav)
+        else Toast.makeText(this, "Izin dibutuhkan untuk pindah video", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun readPermission() =
+        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO
+        else Manifest.permission.READ_EXTERNAL_STORAGE
+
+    /** dir = -1 video sebelumnya, 1 video berikutnya (satu folder, urut nama). */
+    private fun navigate(dir: Int) {
+        if (ContextCompat.checkSelfPermission(this, readPermission()) != PackageManager.PERMISSION_GRANTED) {
+            pendingNav = dir
+            askPerm.launch(readPermission())
+            return
+        }
+        Thread {
+            val (target, msg) = findNeighbor(dir)
+            runOnUiThread {
+                if (target != null) loadVideo(target)
+                else Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            }
+        }.start()
+    }
+
+    private data class VRow(val id: Long, val name: String, val path: String, val size: Long)
+
+    private fun findNeighbor(dir: Int): Pair<Uri?, String> {
+        val rows = ArrayList<VRow>()
+        val proj = arrayOf(
+            MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DATA, MediaStore.Video.Media.SIZE
+        )
+        contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, proj, null, null, null)?.use { c ->
+            while (c.moveToNext()) {
+                rows.add(VRow(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getLong(3)))
+            }
+        }
+        val size = pfd?.statSize ?: -1L
+        val cands = rows.filter { it.name == videoName }
+        val cur = cands.firstOrNull { it.size == size } ?: cands.firstOrNull()
+            ?: return Pair(null, "Video ini tidak ditemukan di penyimpanan HP")
+        val folder = File(cur.path).parent
+        val list = rows.filter { File(it.path).parent == folder }.sortedBy { it.name.lowercase() }
+        val i = list.indexOfFirst { it.id == cur.id }
+        val j = i + dir
+        if (j < 0) return Pair(null, "Ini video pertama di folder")
+        if (j >= list.size) return Pair(null, "Ini video terakhir di folder")
+        return Pair(ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, list[j].id), "")
+    }
+
     // ---------- kontrol ----------
     private fun setupControls() {
         btnPlay.setOnClickListener {
@@ -132,14 +206,10 @@ class PlayerActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnStop).setOnClickListener {
             player.stop(); stopped = true; seek.progress = 0f
         }
-        findViewById<View>(R.id.btnPrev).setOnClickListener { player.time = 0 }
-        findViewById<View>(R.id.btnNext).setOnClickListener { skip(60_000) }
+        findViewById<View>(R.id.btnPrev).setOnClickListener { navigate(-1) }
+        findViewById<View>(R.id.btnNext).setOnClickListener { navigate(1) }
         findViewById<View>(R.id.btnRew).setOnClickListener { skip(-10_000) }
         findViewById<View>(R.id.btnFwd).setOnClickListener { skip(10_000) }
-        findViewById<View>(R.id.btnStep).setOnClickListener {
-            if (player.isPlaying) player.pause()
-            player.time = player.time + 40
-        }
 
         seek.onSeek = { p ->
             val len = player.length
@@ -349,8 +419,8 @@ class PlayerActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.mNav).setOnClickListener { v ->
             menu(v,
-                "Previous" to { player.time = 0 },
-                "Next" to { skip(60_000) })
+                "Previous" to { navigate(-1) },
+                "Next" to { navigate(1) })
         }
         findViewById<View>(R.id.mFav).setOnClickListener { v ->
             menu(v,
@@ -389,7 +459,7 @@ class PlayerActivity : AppCompatActivity() {
             val t = player.time
             if (len > 0) seek.progress = t.toFloat() / len
             tvTime.text = "${fmt(t)} / ${fmt(len)}"
-            btnPlay.setImageResource(if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+            btnPlay.setImageResource(if (player.isPlaying) R.drawable.btn_pause else R.drawable.btn_play)
             val st = when {
                 stopped -> "Stopped"
                 player.isPlaying -> "Playing"
@@ -408,14 +478,17 @@ class PlayerActivity : AppCompatActivity() {
         for (i in 0 until m.trackCount) {
             when (val t = m.getTrack(i)) {
                 is IMedia.VideoTrack ->
-                    if (video.isEmpty()) video = "[${codecName(t.codec)} ${t.width}x${t.height}]"
+                    if (video.isEmpty()) video = "[${trackName(t)} ${t.width}x${t.height}]"
                 is IMedia.AudioTrack ->
-                    if (audio.isEmpty()) audio = "[${codecName(t.codec)} ${channels(t.channels)}]"
+                    if (audio.isEmpty()) audio = "[${trackName(t)} ${channels(t.channels)}]"
                 else -> {}
             }
         }
         return "$video $audio".trim()
     }
+
+    private fun trackName(t: IMedia.Track): String =
+        t.description?.takeIf { it.isNotBlank() } ?: codecName(t.codec)
 
     private fun codecName(c: String?): String = when (c?.lowercase()) {
         "avc1", "h264" -> "H264"

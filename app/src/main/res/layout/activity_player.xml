@@ -106,18 +106,18 @@
     <LinearLayout
         android:id="@+id/controlRow"
         android:layout_width="match_parent"
-        android:layout_height="40dp"
+        android:layout_height="48dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="4dp"
         android:paddingEnd="8dp">
-        <ImageButton android:id="@+id/btnPlay" style="@style/CtrlBtn" android:src="@drawable/ic_play" />
-        <ImageButton android:id="@+id/btnStop" style="@style/CtrlBtn" android:src="@drawable/ic_stop" />
-        <ImageButton android:id="@+id/btnPrev" style="@style/CtrlBtn" android:src="@drawable/ic_prev" />
-        <ImageButton android:id="@+id/btnRew" style="@style/CtrlBtn" android:src="@drawable/ic_rew" />
-        <ImageButton android:id="@+id/btnFwd" style="@style/CtrlBtn" android:src="@drawable/ic_fwd" />
-        <ImageButton android:id="@+id/btnNext" style="@style/CtrlBtn" android:src="@drawable/ic_next" />
-        <ImageButton android:id="@+id/btnStep" style="@style/CtrlBtn" android:src="@drawable/ic_step" />
+
+        <ImageButton android:id="@+id/btnPlay" style="@style/CircleBtn" android:src="@drawable/btn_play" />
+        <ImageButton android:id="@+id/btnStop" style="@style/CircleBtn" android:src="@drawable/btn_stop" />
+        <ImageButton android:id="@+id/btnPrev" style="@style/CircleBtn" android:src="@drawable/btn_prev" />
+        <ImageButton android:id="@+id/btnRew" style="@style/CircleBtn" android:src="@drawable/btn_rew" />
+        <ImageButton android:id="@+id/btnFwd" style="@style/CircleBtn" android:src="@drawable/btn_fwd" />
+        <ImageButton android:id="@+id/btnNext" style="@style/CircleBtn" android:src="@drawable/btn_next" />
 
         <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
 
