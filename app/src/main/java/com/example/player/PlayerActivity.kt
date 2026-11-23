@@ -123,6 +123,8 @@ class PlayerActivity : AppCompatActivity() {
         setupVolume()
         setupMenus()
         handler.post(tick)
+}
+    }
 
         private fun openVideo(uri: Uri) {
     player.stop()
