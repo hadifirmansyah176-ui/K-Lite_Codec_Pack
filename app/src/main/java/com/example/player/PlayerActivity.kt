@@ -43,9 +43,6 @@ class PlayerActivity : AppCompatActivity() {
     private var uriKey = ""
     private var videoName = ""
 
-    private var videoUris: ArrayList<Uri> = arrayListOf()
-    private var videoIndex = 0
-
     private lateinit var seek: SeekBarView
     private lateinit var tvState: TextView
     private lateinit var tvTime: TextView
@@ -105,72 +102,25 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         intent.data?.let { uri ->
-        videoUris =
-            intent.getParcelableArrayListExtra<Uri>("videoUris") ?: arrayListOf()
-
-        videoIndex = intent.getIntExtra("videoIndex", 0)
-
-        if (videoUris.isNotEmpty()) {
-        val uri = videoUris[videoIndex.coerceIn(videoUris.indices)]
-        openVideo(uri)
-        } else {
-            intent.data?.let { uri ->
-                openVideo(uri)
-    }
-}
+            uriKey = uri.toString()
+            videoName = displayName(uri)
+            findViewById<TextView>(R.id.tvTitle).text = videoName
+            pfd = contentResolver.openFileDescriptor(uri, "r")
+            pfd?.let {
+                val media = Media(libVLC, it.fileDescriptor)
+                mediaRef = media
+                player.media = media
+                player.play()
+            }
+            intent.getStringExtra("sub")?.let { path ->
+                player.addSlave(IMedia.Slave.Type.Subtitle, Uri.fromFile(File(path)), true)
+            }
+        }
 
         setupControls()
         setupVolume()
         setupMenus()
         handler.post(tick)
-}
-    }
-
-        private fun openVideo(uri: Uri) {
-    player.stop()
-    pfd?.close()
-    mediaRef?.release()
-
-    uriKey = uri.toString()
-    videoName = displayName(uri)
-    findViewById<TextView>(R.id.tvTitle).text = videoName
-    stopped = false
-    trackInfo = ""
-
-    pfd = contentResolver.openFileDescriptor(uri, "r")
-    pfd?.let {
-        val media = Media(libVLC, it.fileDescriptor)
-        mediaRef = media
-        player.media = media
-        player.play()
-    }
-}
-
-private fun playPrevious() {
-    if (videoUris.isEmpty()) {
-        player.time = 0
-        return
-    }
-
-    videoIndex =
-        if (videoIndex > 0) videoIndex - 1
-        else videoUris.lastIndex
-
-    openVideo(videoUris[videoIndex])
-}
-
-private fun playNext() {
-    if (videoUris.isEmpty()) {
-        skip(60_000)
-        return
-    }
-
-    videoIndex =
-        if (videoIndex < videoUris.lastIndex) videoIndex + 1
-        else 0
-
-    openVideo(videoUris[videoIndex])
-}
     }
 
     // ---------- kontrol ----------
@@ -182,8 +132,10 @@ private fun playNext() {
         findViewById<View>(R.id.btnStop).setOnClickListener {
             player.stop(); stopped = true; seek.progress = 0f
         }
-        findViewById<View>(R.id.btnPrev).setOnClickListener { playPrevious() }
-        findViewById<View>(R.id.btnNext).setOnClickListener { playNext() }
+        findViewById<View>(R.id.btnPrev).setOnClickListener { player.time = 0 }
+        findViewById<View>(R.id.btnNext).setOnClickListener { skip(60_000) }
+        findViewById<View>(R.id.btnRew).setOnClickListener { skip(-10_000) }
+        findViewById<View>(R.id.btnFwd).setOnClickListener { skip(10_000) }
         findViewById<View>(R.id.btnStep).setOnClickListener {
             if (player.isPlaying) player.pause()
             player.time = player.time + 40
@@ -395,11 +347,10 @@ private fun playNext() {
                     }
                 })
         }
-       findViewById<View>(R.id.mNav).setOnClickListener { v ->
-    menu(v,
-        "Previous" to { playPrevious() },
-        "Next" to { playNext() })
-}
+        findViewById<View>(R.id.mNav).setOnClickListener { v ->
+            menu(v,
+                "Previous" to { player.time = 0 },
+                "Next" to { skip(60_000) })
         }
         findViewById<View>(R.id.mFav).setOnClickListener { v ->
             menu(v,
