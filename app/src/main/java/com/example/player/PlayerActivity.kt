@@ -2,6 +2,8 @@ package com.example.player
 
 import android.Manifest
 import android.content.ContentUris
+import android.content.Context
+import android.media.AudioManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -33,6 +35,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 import java.net.URLEncoder
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -100,8 +103,11 @@ class PlayerActivity : AppCompatActivity() {
         val videoLayout = findViewById<VLCVideoLayout>(R.id.videoLayout)
         player.attachViews(videoLayout, null, true, false)
         videoLayout.setOnClickListener { toggleChrome() }
+        volumeControlStream = AudioManager.STREAM_MUSIC
         player.setEventListener { ev ->
             if (ev.type == MediaPlayer.Event.EndReached) stopped = true
+            // Volume/boost baru efektif setelah output audio aktif, jadi pasang ulang di sini
+            if (ev.type == MediaPlayer.Event.Playing) runOnUiThread { applyBoost() }
         }
 
         intent.data?.let { uri ->
@@ -257,12 +263,37 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     // ---------- volume ----------
-    private var lastVol = 100
-    private var boost = false
+    // Volume dasar = volume media Android, jadi saat aplikasi dibuka mengikuti volume bawaan HP.
+    // Boost = penguat tambahan di dalam pemutar: 200% atau 400%.
+    private val audio by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private var lastIdx = 0
+    private var boostLevel = 0          // 0 = mati, 200, 400
+    private var eq: MediaPlayer.Equalizer? = null
+    private var refreshVolumeUi: (() -> Unit)? = null
 
-    /** Volume efektif: 0-100, atau 0-200 bila boost aktif. */
-    private fun applyVolume(level: Int) {
-        player.volume = if (boost) level * 2 else level
+    private fun maxIdx() = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+    private fun sysIdx() = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+    private fun sysPercent() = (sysIdx() * 100f / maxIdx()).roundToInt()
+    private fun setSysIdx(i: Int) {
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, i.coerceIn(0, maxIdx()), 0)
+    }
+
+    private fun wantedPlayerVolume() = if (boostLevel > 0) 200 else 100
+
+    /**
+     * 200% = penguat perangkat lunak pemutar (200).
+     * 400% = penguat 200 ditambah preamp equalizer +6 dB (2x lagi).
+     */
+    private fun applyBoost() {
+        if (player.volume != wantedPlayerVolume()) player.volume = wantedPlayerVolume()
+        if (boostLevel >= 400) {
+            val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
+            e.preAmp = 6f
+            player.setEqualizer(e)
+        } else if (eq != null) {
+            player.setEqualizer(null)
+            eq = null
+        }
     }
 
     private fun setupVolume() {
@@ -271,40 +302,42 @@ class PlayerActivity : AppCompatActivity() {
         val volNumber = findViewById<TextView>(R.id.volNumber)
         val imgVol = findViewById<ImageView>(R.id.imgVol)
 
+        // Tampilan selalu mengikuti volume media HP (termasuk saat tombol fisik ditekan)
         fun render() {
-            volNumber.text = box.level.toString()
-            imgVol.alpha = if (box.level > 0) 1f else 0.4f
+            val p = sysPercent()
+            box.level = p
+            volNumber.text = p.toString()
+            imgVol.alpha = if (p > 0) 1f else 0.4f
         }
-        fun setLevel(l: Int) {
-            box.level = l.coerceIn(0, 100)
-            applyVolume(box.level)
+        refreshVolumeUi = { render() }
+        render()
+
+        // Kotak hijau: sentuh/geser untuk mengatur volume
+        box.onChange = { lvl ->
+            setSysIdx((lvl * maxIdx() / 100f).roundToInt())
             render()
         }
 
-        box.level = 100
-        render()
-        box.onChange = { applyVolume(it); render() }
-
-        // Boost: merah = aktif (sampai 200%), putih = nonaktif
-        btnBoost.onToggle = { on ->
-            boost = on
-            box.multiplier = if (on) 2 else 1
-            applyVolume(box.level)
+        // Boost: putih = mati, merah = 200% / 400%
+        btnBoost.onLevel = { lv ->
+            boostLevel = lv
+            applyBoost()
         }
 
-        // Dua tombol volume kiri-tengah: atas = besarkan, bawah = kecilkan (0-100).
-        // Tahan tombol untuk mengubah terus-menerus.
+        // Dua tombol kiri-tengah: atas = besarkan, bawah = kecilkan. Tahan untuk terus berubah.
         fun bindStep(btn: View, delta: Int) {
             val repeat = object : Runnable {
                 override fun run() {
-                    setLevel(box.level + delta)
-                    handler.postDelayed(this, 120)
+                    setSysIdx(sysIdx() + delta)
+                    render()
+                    handler.postDelayed(this, 150)
                 }
             }
             btn.setOnTouchListener { v, e ->
                 when (e.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        setLevel(box.level + delta)
+                        setSysIdx(sysIdx() + delta)
+                        render()
                         handler.postDelayed(repeat, 450)
                         true
                     }
@@ -318,13 +351,14 @@ class PlayerActivity : AppCompatActivity() {
                 }
             }
         }
-        bindStep(findViewById<View>(R.id.volUp), 5)
-        bindStep(findViewById<View>(R.id.volDown), -5)
+        bindStep(findViewById<View>(R.id.volUp), 1)
+        bindStep(findViewById<View>(R.id.volDown), -1)
 
-        // Ikon speaker di baris bawah: sentuh = mute / unmute
+        // Ikon speaker di baris bawah: mute / unmute
         imgVol.setOnClickListener {
-            if (box.level > 0) { lastVol = box.level; setLevel(0) }
-            else setLevel(if (lastVol > 0) lastVol else 100)
+            if (sysIdx() > 0) { lastIdx = sysIdx(); setSysIdx(0) }
+            else setSysIdx(if (lastIdx > 0) lastIdx else maxIdx())
+            render()
         }
     }
 
@@ -482,6 +516,8 @@ class PlayerActivity : AppCompatActivity() {
             if (len > 0) seek.progress = t.toFloat() / len
             tvTime.text = "${fmt(t)} / ${fmt(len)}"
             btnPlay.setImageResource(if (player.isPlaying) R.drawable.btn_pause else R.drawable.btn_play)
+            refreshVolumeUi?.invoke()
+            if (player.isPlaying && player.volume != wantedPlayerVolume()) player.volume = wantedPlayerVolume()
             val st = when {
                 stopped -> "Stopped"
                 player.isPlaying -> "Playing"

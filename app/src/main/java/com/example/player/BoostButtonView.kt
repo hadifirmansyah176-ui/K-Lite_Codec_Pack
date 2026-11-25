@@ -6,14 +6,18 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 
-/** Tombol boost berbentuk lingkaran: putih = nonaktif, merah = aktif. */
+/**
+ * Tombol boost berbentuk lingkaran.
+ * Putih = mati, merah = aktif. Setiap disentuh: mati -> 200% -> 400% -> mati.
+ */
 class BoostButtonView @JvmOverloads constructor(
     ctx: Context, attrs: AttributeSet? = null
 ) : View(ctx, attrs) {
 
-    var active = false
+    /** 0 = mati, 200, atau 400 */
+    var level = 0
         set(v) { field = v; invalidate() }
-    var onToggle: ((Boolean) -> Unit)? = null
+    var onLevel: ((Int) -> Unit)? = null
 
     private val d = resources.displayMetrics.density
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -21,25 +25,27 @@ class BoostButtonView @JvmOverloads constructor(
         style = Paint.Style.STROKE; color = Color.BLACK; strokeWidth = 1.5f * d
     }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER; isFakeBoldText = true; textSize = 10f * d
+        textAlign = Paint.Align.CENTER; isFakeBoldText = true
     }
 
     override fun onDraw(c: Canvas) {
         val cx = width / 2f
         val cy = height / 2f
         val r = minOf(width, height) / 2f - 1.5f * d
-        fill.color = if (active) Color.rgb(229, 28, 35) else Color.WHITE
-        text.color = if (active) Color.WHITE else Color.BLACK
+        val on = level > 0
+        fill.color = if (on) Color.rgb(229, 28, 35) else Color.WHITE
+        text.color = if (on) Color.WHITE else Color.BLACK
+        text.textSize = (if (on) 10f else 8f) * d
         c.drawCircle(cx, cy, r, fill)
         c.drawCircle(cx, cy, r, border)
-        c.drawText("200%", cx, cy + text.textSize / 3f, text)
+        c.drawText(if (on) "$level%" else "BOOST", cx, cy + text.textSize / 3f, text)
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (e.action == MotionEvent.ACTION_DOWN) return true
         if (e.action == MotionEvent.ACTION_UP) {
-            active = !active
-            onToggle?.invoke(active)
+            level = when (level) { 0 -> 200; 200 -> 400; else -> 0 }
+            onLevel?.invoke(level)
             performClick()
             return true
         }
