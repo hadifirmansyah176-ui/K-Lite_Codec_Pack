@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -102,7 +103,7 @@ class PlayerActivity : AppCompatActivity() {
         player = MediaPlayer(libVLC)
         val videoLayout = findViewById<VLCVideoLayout>(R.id.videoLayout)
         player.attachViews(videoLayout, null, true, false)
-        videoLayout.setOnClickListener { toggleChrome() }
+        setupBrightnessGesture(videoLayout)
         volumeControlStream = AudioManager.STREAM_MUSIC
         player.setEventListener { ev ->
             if (ev.type == MediaPlayer.Event.EndReached) stopped = true
@@ -121,6 +122,59 @@ class PlayerActivity : AppCompatActivity() {
         setupVolume()
         setupMenus()
         handler.post(tick)
+    }
+
+    // ---------- kecerahan layar (geser atas/bawah) ----------
+    private val hideBrightInfo = Runnable {
+        findViewById<View>(R.id.brightInfo).visibility = View.GONE
+    }
+
+    private fun currentBrightness(): Float {
+        val b = window.attributes.screenBrightness
+        if (b >= 0f) return b
+        return try {
+            Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
+        } catch (e: Exception) {
+            0.5f
+        }
+    }
+
+    private fun setBrightness(v: Float) {
+        val x = v.coerceIn(0.02f, 1f)
+        val lp = window.attributes
+        lp.screenBrightness = x
+        window.attributes = lp
+        val info = findViewById<TextView>(R.id.brightInfo)
+        info.text = "Kecerahan: ${(x * 100).roundToInt()}%"
+        info.visibility = View.VISIBLE
+        handler.removeCallbacks(hideBrightInfo)
+        handler.postDelayed(hideBrightInfo, 1000)
+    }
+
+    /** Geser ke atas = lebih terang, ke bawah = lebih gelap. Sentuh sekali = tampil/sembunyi kontrol. */
+    private fun setupBrightnessGesture(layout: View) {
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
+        var startY = 0f
+        var startB = 0f
+        var moved = false
+        layout.setOnTouchListener { v, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = e.y; startB = currentBrightness(); moved = false; true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = startY - e.y
+                    if (abs(dy) > slop) moved = true
+                    if (moved && v.height > 0) setBrightness(startB + dy / v.height)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) toggleChrome()
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     // ---------- layar penuh ----------
